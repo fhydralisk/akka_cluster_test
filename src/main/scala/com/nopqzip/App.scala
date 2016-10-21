@@ -10,8 +10,6 @@ import com.typesafe.config.ConfigFactory
  */
 
 case class StMsg(text : String)
-case class FindWatcher()
-case class FindWatcherReply(found: Boolean)
 
 class Watcher extends Actor {
   override def preStart = {
@@ -23,6 +21,9 @@ class Watcher extends Actor {
   }
   
   def receive = {
+    case StMsg(text) if text == "hello" =>
+      sender() ! StMsg("hi")
+      context watch sender
     case StMsg(text) =>
       println(s"$text")
       // sender() ! StMsg("ok")
@@ -33,7 +34,7 @@ class Watcher extends Actor {
 }
 
 class Watchee extends Actor {
-  private var scheduler: Cancellable = null
+  private var scheduler: Cancellable = null 
   override def preStart = {
     val config = ConfigFactory.load()
     val host = config.getString("watch.watcher.tcp.hostname")
@@ -41,8 +42,10 @@ class Watchee extends Actor {
     println ("Watchee start")
     import context.dispatcher
     scheduler = context.system.scheduler.schedule(1 seconds, 1 seconds) {
-      val actorSelection = context.actorSelection(s"akka.tcp://ClusterSystemName@$host:$port/user/watcher")
+      val actorSelection = context.actorSelection(s"akka.tcp://ClusterSystem@$host:$port/user/watcher")
       println(actorSelection)
+      implicit val timeout = Timeout(5.seconds)
+      actorSelection ! StMsg("hello")
     }
   }
   
@@ -51,10 +54,11 @@ class Watchee extends Actor {
   }
   
   def receive = {
-    case StMsg(text) if text=="hi" => println("hi, watcher")
-    case fw : FindWatcher =>
-      println("finding watcher")
-      sender ! FindWatcherReply(true)
+    case StMsg(text) if text=="hi" => 
+      println("hi, watcher")
+      if (scheduler != null && scheduler.cancel()) {
+        scheduler = null
+      }
     case _ => println("unhandle2")
   }
   
@@ -65,12 +69,24 @@ object WatcheeApp {
     val conf = ConfigFactory.load()
     val port = conf.getInt("watch.watchee.tcp.port")
     val host = conf.getString("watch.watchee.tcp.hostname")
+    val terminate = conf.getInt("watch.watchee.testing.terminate")
     val config = ConfigFactory.parseString(s"akka.remote.netty.tcp.port=$port").
-      withFallback(ConfigFactory.parseString("akka.remote.netty.tcp.hostname=$host")).
+      withFallback(ConfigFactory.parseString(s"akka.remote.netty.tcp.hostname=$host")).
       withFallback(ConfigFactory.parseString("akka.cluster.roles = [watcher]")).
       withFallback(conf)
     val system = ActorSystem.create("ClusterSystem", config)
     val watchee = system.actorOf(Props[Watchee], name="watchee") 
+    if (terminate > 0) {
+      import system.dispatcher
+      system.scheduler.scheduleOnce (terminate.seconds) {
+        println("terminating actor system")
+        system.terminate().onSuccess {
+          case result =>
+            println(result)
+            println("actor system down")
+        }
+      }
+    }
   }
 }
 
@@ -80,22 +96,17 @@ object WatcherApp {
     val port = conf.getInt("watch.watcher.tcp.port")
     val host = conf.getString("watch.watcher.tcp.hostname")
     val config = ConfigFactory.parseString(s"akka.remote.netty.tcp.port=$port").
-      withFallback(ConfigFactory.parseString("akka.remote.netty.tcp.hostname=$host")).
+      withFallback(ConfigFactory.parseString(s"akka.remote.netty.tcp.hostname=$host")).
       withFallback(ConfigFactory.parseString("akka.cluster.roles = [watcher]")).
       withFallback(conf)
     val system = ActorSystem.create("ClusterSystem", config)
     val watcher = system.actorOf(Props[Watcher], name="watcher")
-    
-    import system.dispatcher
-    system.scheduler.schedule(2.seconds, 2.seconds) {
-      implicit val timeout = Timeout(5.seconds)
-      val reply = (watcher ? StMsg("hello"))
-    }  
   }
 }
 
 object App {
   def main(args: Array[String]) = {
+    WatcheeApp.main(Array.empty)
     WatcherApp.main(Array.empty)
   }
 }
