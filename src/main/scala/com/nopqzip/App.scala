@@ -1,5 +1,5 @@
 package com.nopqzip
-import akka.actor.{ActorSystem, Actor, Props, Terminated, Cancellable}
+import akka.actor.{ActorSystem, Actor, ActorRef, Props, Terminated, Cancellable}
 import scala.concurrent.duration._
 import akka.util.Timeout
 import akka.pattern.ask
@@ -24,12 +24,13 @@ class Watcher extends Actor {
     case StMsg(text) if text == "hello" =>
       sender() ! StMsg("hi")
       import context.dispatcher
+      val senderActor : ActorRef = sender()
       context.system.scheduler.scheduleOnce(30.seconds) {
         println("10 seconds left to watch")
       }
       context.system.scheduler.scheduleOnce(40.seconds) {
         println("watching sender" + sender.toString())
-        context watch sender
+        context watch senderActor
       }
     case StMsg(text) =>
       println(s"$text")
@@ -80,7 +81,7 @@ object WatcheeApp {
     val terminate = conf.getInt("watch.watchee.testing.terminate")
     val config = ConfigFactory.parseString(s"akka.remote.netty.tcp.port=$port").
       withFallback(ConfigFactory.parseString(s"akka.remote.netty.tcp.hostname=$host")).
-      withFallback(ConfigFactory.parseString("akka.cluster.roles = [watcher]")).
+      withFallback(ConfigFactory.parseString("akka.cluster.roles = [watchee]")).
       withFallback(conf)
     val system = ActorSystem.create("ClusterSystem", config)
     val watchee = system.actorOf(Props[Watchee], name="watchee") 
