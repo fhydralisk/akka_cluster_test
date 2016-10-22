@@ -25,6 +25,7 @@ class Watcher extends Actor {
       sender() ! StMsg("hi")
       import context.dispatcher
       val senderActor : ActorRef = sender()
+      println("sender is " + senderActor.toString())
       context.system.scheduler.scheduleOnce(30.seconds) {
         println("10 seconds left to watch")
       }
