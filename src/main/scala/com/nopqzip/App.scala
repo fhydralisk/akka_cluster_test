@@ -29,7 +29,7 @@ class Watcher extends Actor {
         println("10 seconds left to watch")
       }
       context.system.scheduler.scheduleOnce(40.seconds) {
-        println("watching sender" + sender.toString())
+        println("watching sender" + senderActor.toString())
         context watch senderActor
       }
     case StMsg(text) =>
