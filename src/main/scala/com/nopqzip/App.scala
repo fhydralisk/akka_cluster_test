@@ -23,7 +23,14 @@ class Watcher extends Actor {
   def receive = {
     case StMsg(text) if text == "hello" =>
       sender() ! StMsg("hi")
-      context watch sender
+      import context.dispatcher
+      context.system.scheduler.scheduleOnce(30.seconds) {
+        println("10 seconds left to watch")
+      }
+      context.system.scheduler.scheduleOnce(40.seconds) {
+        println("watching sender" + sender.toString())
+        context watch sender
+      }
     case StMsg(text) =>
       println(s"$text")
       // sender() ! StMsg("ok")
@@ -44,7 +51,7 @@ class Watchee extends Actor {
     scheduler = context.system.scheduler.schedule(1 seconds, 1 seconds) {
       val actorSelection = context.actorSelection(s"akka.tcp://ClusterSystem@$host:$port/user/watcher")
       println(actorSelection)
-      implicit val timeout = Timeout(5.seconds)
+      // implicit val timeout = Timeout(5.seconds)
       actorSelection ! StMsg("hello")
     }
   }
@@ -56,7 +63,8 @@ class Watchee extends Actor {
   def receive = {
     case StMsg(text) if text=="hi" => 
       println("hi, watcher")
-      if (scheduler != null && scheduler.cancel()) {
+      if (scheduler != null) { 
+        scheduler.cancel() 
         scheduler = null
       }
     case _ => println("unhandle2")
