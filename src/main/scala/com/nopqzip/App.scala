@@ -80,14 +80,16 @@ object WatcheeApp {
     val port = conf.getInt("watch.watchee.tcp.port")
     val host = conf.getString("watch.watchee.tcp.hostname")
     val terminate = conf.getInt("watch.watchee.testing.terminate")
+    val killActor = conf.getInt("watch.watchee.testing.killactor")
     val config = ConfigFactory.parseString(s"akka.remote.netty.tcp.port=$port").
       withFallback(ConfigFactory.parseString(s"akka.remote.netty.tcp.hostname=$host")).
       withFallback(ConfigFactory.parseString("akka.cluster.roles = [watchee]")).
       withFallback(conf)
     val system = ActorSystem.create("ClusterSystem", config)
-    val watchee = system.actorOf(Props[Watchee], name="watchee") 
+    val watchee = system.actorOf(Props[Watchee], name="watchee")
+    
+    import system.dispatcher
     if (terminate > 0) {
-      import system.dispatcher
       system.scheduler.scheduleOnce (terminate.seconds) {
         println("terminating actor system")
         system.terminate().onSuccess {
@@ -95,6 +97,18 @@ object WatcheeApp {
             println(result)
             println("actor system down")
         }
+      }
+    }
+    
+    if (killActor > 0) {
+      val inform = if (killActor > 15) killActor - 15 else 0
+      system.scheduler.scheduleOnce(inform.seconds) {
+        val t = killActor - inform
+        println(s"$t seconds left to kill actor")
+      }
+      system.scheduler.scheduleOnce(killActor.seconds) {
+        println("Stopping actor " + watchee.toString())
+        system.stop(watchee)
       }
     }
   }
