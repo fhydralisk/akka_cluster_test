@@ -23,16 +23,9 @@ class Watcher extends Actor {
   def receive = {
     case StMsg(text) if text == "hello" =>
       sender() ! StMsg("hi")
-      import context.dispatcher
-      val senderActor : ActorRef = sender()
-      println("sender is " + senderActor.toString())
-      context.system.scheduler.scheduleOnce(25.seconds) {
-        println("15 seconds left to watch")
-      }
-      context.system.scheduler.scheduleOnce(40.seconds) {
-        println("watching sender" + senderActor.toString())
-        context watch senderActor
-      }
+      
+      println("watching sender" + sender().toString())
+      context watch sender()
     case StMsg(text) =>
       println(s"$text")
       // sender() ! StMsg("ok")
