@@ -31,7 +31,7 @@ class Watcher extends Actor {
       // sender() ! StMsg("ok")
     
     case Terminated(a) =>
-      print ("Watchee Terminated")
+      print ("Watchee Terminated, sender is " + sender.toString())
   }
 }
 
