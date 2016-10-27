@@ -11,7 +11,11 @@ class Watcher extends Actor with ActorLogging {
   val mediator = DistributedPubSub(context.system).mediator
   override def preStart = {
     log.info ("Watcher start")
-    mediator ! Publish("watchee", StMsg("TEST"))
+    import context.dispatcher
+    context.system.scheduler.scheduleOnce(5 seconds) {
+      log.info("Publishing")
+      mediator ! Publish("watchee", StMsg("TEST"))
+    }
   }
   
   override def postStop = {
@@ -19,7 +23,7 @@ class Watcher extends Actor with ActorLogging {
   }
   
   def receive = {
-    case StMsg(text) if text equals "hello" =>
+    case StMsg(text) if text equals "hello" ⇒
       sender() ! StMsg("hi")
       val watchee = sender()
       import context.dispatcher
@@ -31,11 +35,11 @@ class Watcher extends Actor with ActorLogging {
         context watch watchee
       }
       
-    case StMsg(text) =>
+    case StMsg(text) ⇒
       log.info("Receive " + text + " from " + sender.toString())
       // sender() ! StMsg("ok")
     
-    case Terminated(a) =>
+    case Terminated(a) ⇒
       log.info("Watchee Terminated, sender is " + sender.toString())
   }
 }

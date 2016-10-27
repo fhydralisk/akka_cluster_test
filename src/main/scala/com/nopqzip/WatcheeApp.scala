@@ -28,7 +28,7 @@ class Watchee extends Actor with ActorLogging {
       context.system.scheduler.scheduleOnce (terminate.seconds) {
        log.info("terminating actor system")
        context.system.terminate().onSuccess {
-        case result =>
+        case result ⇒
           log.info(result.toString())
           log.info("actor system down")
        }
@@ -76,7 +76,7 @@ class Watchee extends Actor with ActorLogging {
       scheduleSendmsg(watcher)
     case StMsg(text) if text eq "TEST" ⇒
       log.info("TEST sender is" + sender().toString())
-    case _ => log.info("unhandle2")
+    case _ ⇒ log.info("unhandle2")
   }
 }
 
