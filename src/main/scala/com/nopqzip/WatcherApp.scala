@@ -12,7 +12,7 @@ class Watcher extends Actor with ActorLogging {
   override def preStart = {
     log.info ("Watcher start")
     import context.dispatcher
-    context.system.scheduler.scheduleOnce(5 seconds) {
+    context.system.scheduler.scheduleOnce(10 seconds) {
       log.info("Publishing")
       mediator ! Publish("watchee", StMsg("TEST"))
     }
