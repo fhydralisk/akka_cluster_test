@@ -65,16 +65,16 @@ class Watchee extends Actor with ActorLogging {
   }
   
   override def receive = {
-    case StMsg(text) if text eq "hi" ⇒ 
+    case StMsg(text) if text equals "hi" ⇒ 
       log.info("hi, watcher")
     case SubscribeAck(Subscribe("watchee", None, `self`)) ⇒
       log.info("subscribing");
-    case StMsg(text) if text eq "can I watch you?" ⇒
+    case StMsg(text) if text equals "can I watch you?" ⇒
       sender ! StMsg("yes you can!")
       val watcher = sender()
       // deal with tests
       scheduleSendmsg(watcher)
-    case StMsg(text) if text eq "TEST" ⇒
+    case StMsg(text) if text equals "TEST" ⇒
       log.info("TEST sender is" + sender().toString())
     case _ ⇒ log.info("unhandle2")
   }
