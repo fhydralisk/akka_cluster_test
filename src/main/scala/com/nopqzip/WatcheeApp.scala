@@ -1,90 +1,91 @@
 package com.nopqzip
 
-import akka.actor.{ActorSystem, ActorRef, Actor, Cancellable, Props}
+import akka.actor.{ActorSystem, ActorRef, Actor, Cancellable, Props, ActorLogging}
 import com.typesafe.config.{Config, ConfigFactory}
+import akka.cluster.pubsub._
 import scala.concurrent.duration._
 
-class Watchee extends Actor {
-  private var scheduler: Cancellable = null 
+class Watchee extends Actor with ActorLogging {
+  import DistributedPubSubMediator.{ Subscribe, SubscribeAck }
+  val mediator = DistributedPubSub(context.system).mediator
+  // subscribe to the topic named "content"
+  mediator ! Subscribe("watchee", self)
   
   override def preStart = {
-    val config = ConfigFactory.load()
-    val host = config.getString("watch.watcher.tcp.hostname")
-    val port = config.getInt("watch.watcher.tcp.port")
-    println ("Watchee start")
-    import context.dispatcher
-    scheduler = context.system.scheduler.schedule(1 seconds, 1 seconds) {
-      val actorSelection = context.actorSelection(s"akka.tcp://ClusterSystem@$host:$port/user/watcher")
-      println(actorSelection)
-      // implicit val timeout = Timeout(5.seconds)
-      actorSelection ! StMsg("hello")
-    }
+    log.info("Watchee start")
+    scheduleSuicide()
   }
   
   override def postStop = {
-    println ("Watchee stop")
+    log.info ("Watchee stop")
   }
   
-  def receive = {
-    case StMsg(text) if text equals "hi" => 
-      println("hi, watcher")
+  def scheduleSuicide() = {
+    val terminate = WatcheeApp.terminate
+    val killActor = WatcheeApp.killActor
+    import context.dispatcher
+    if (WatcheeApp.terminate > 0) {
+      context.system.scheduler.scheduleOnce (terminate.seconds) {
+       log.info("terminating actor system")
+       context.system.terminate().onSuccess {
+        case result =>
+          log.info(result.toString())
+          log.info("actor system down")
+       }
+      }
+    }
+    
+    if (killActor > 0) {
+      val inform = if (killActor > 15) killActor - 15 else 0
+      context.system.scheduler.scheduleOnce(inform.seconds) {
+       val t = killActor - inform
+       log.info(s"$t seconds left to kill actor")
+      }
+      context.system.scheduler.scheduleOnce(killActor.seconds) {
+       log.info("Stopping actor " + self.toString())
+       context.system.stop(self)
+      }
+    }
+  }
+  
+  def scheduleSendmsg(watcher: ActorRef) = {
+    import context.dispatcher
+    val sendMsg = WatcheeApp.sendMsg
+    if (sendMsg > 0) {
+      val inform = if (sendMsg > 15) sendMsg - 15 else 0
+      context.system.scheduler.scheduleOnce(inform.seconds) {
+        val t = sendMsg - inform
+        log.info(s"$t seconds left to send custom message")
+      }
+      context.system.scheduler.scheduleOnce(sendMsg.seconds) {
+        log.info("sending custom message to watcher" + watcher.toString())
+        watcher ! StMsg("Test")
+      }
+    }
+  }
+  
+  override def receive = {
+    case StMsg(text) if text eq "hi" ⇒ 
+      log.info("hi, watcher")
+    case SubscribeAck(Subscribe("watchee", None, `self`)) ⇒
+      log.info("subscribing");
+    case StMsg(text) if text eq "can I watch you?" ⇒
+      sender ! StMsg("yes you can!")
       val watcher = sender()
-      if (scheduler != null) { 
-        scheduler.cancel() 
-        scheduler = null
-      }
-      
       // deal with tests
-      val terminate = WatcheeApp.terminate
-      val killActor = WatcheeApp.killActor
-      val sendMsg = WatcheeApp.sendMsg
-      import context.dispatcher
-      if (WatcheeApp.terminate > 0) {
-        context.system.scheduler.scheduleOnce (terminate.seconds) {
-          println("terminating actor system")
-          context.system.terminate().onSuccess {
-            case result =>
-              println(result)
-              println("actor system down")
-          }
-        }
-      }
-      
-      if (killActor > 0) {
-        val inform = if (killActor > 15) killActor - 15 else 0
-        context.system.scheduler.scheduleOnce(inform.seconds) {
-          val t = killActor - inform
-          println(s"$t seconds left to kill actor")
-        }
-        context.system.scheduler.scheduleOnce(killActor.seconds) {
-          println("Stopping actor " + self.toString())
-          context.system.stop(self)
-        }
-      }
-      
-      if (sendMsg > 0) {
-        val inform = if (sendMsg > 15) sendMsg - 15 else 0
-        context.system.scheduler.scheduleOnce(inform.seconds) {
-          val t = sendMsg - inform
-          println(s"$t seconds left to send custom message")
-        }
-        context.system.scheduler.scheduleOnce(sendMsg.seconds) {
-          println("sending custom message to watcher" + watcher.toString())
-          watcher ! StMsg("Test")
-        }
-      }
-
-    case _ => println("unhandle2")
+      scheduleSendmsg(watcher)
+    case StMsg(text) if text eq "TEST" ⇒
+      log.info("TEST sender is" + sender().toString())
+    case _ => log.info("unhandle2")
   }
-  
 }
+
 
 object WatcheeApp {
   val conf = ConfigFactory.load()
   val terminate = conf.getInt("watch.watchee.testing.terminate")
   val killActor = conf.getInt("watch.watchee.testing.killactor")
   val sendMsg = conf.getInt("watch.watchee.testing.sendcustom")
-  var watchee : Some[Any] = Some()
   def main(args: Array[String]) : Unit = {
     val conf = ConfigFactory.load()
     val port = conf.getInt("watch.watchee.tcp.port")
@@ -94,6 +95,6 @@ object WatcheeApp {
       withFallback(ConfigFactory.parseString("akka.cluster.roles = [watchee]")).
       withFallback(conf)
     val system = ActorSystem.create("ClusterSystem", config)
-    watchee = Some(system.actorOf(Props[Watchee], name="watchee"))    
+    system.actorOf(Props[Watchee], name="watchee")
   }
 }

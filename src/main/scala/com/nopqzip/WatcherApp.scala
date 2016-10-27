@@ -1,16 +1,21 @@
 package com.nopqzip
 
-import akka.actor.{ActorSystem, Actor, ActorRef, Props, Terminated}
+import akka.actor.{ActorSystem, Actor, ActorRef, Props, Terminated, ActorLogging}
+import akka.cluster.pubsub._
 import scala.concurrent.duration._
 import com.typesafe.config.ConfigFactory
 
-class Watcher extends Actor {
+class Watcher extends Actor with ActorLogging {
+  import DistributedPubSubMediator.Publish
+  // activate the extension
+  val mediator = DistributedPubSub(context.system).mediator
   override def preStart = {
-    println ("Watcher start")
+    log.info ("Watcher start")
+    mediator ! Publish("watchee", StMsg("TEST"))
   }
   
   override def postStop = {
-    println("Watcher Stop")
+    log.info("Watcher Stop")
   }
   
   def receive = {
@@ -19,19 +24,19 @@ class Watcher extends Actor {
       val watchee = sender()
       import context.dispatcher
       context.system.scheduler.scheduleOnce(15 seconds) {
-        println("15s left to watch")
+        log.info("15s left to watch")
       }
       context.system.scheduler.scheduleOnce(30 seconds) {
-        println("watching watchee")
+        log.info("watching watchee")
         context watch watchee
       }
       
     case StMsg(text) =>
-      println("Receive " + text + " from " + sender.toString())
+      log.info("Receive " + text + " from " + sender.toString())
       // sender() ! StMsg("ok")
     
     case Terminated(a) =>
-      print ("Watchee Terminated, sender is " + sender.toString())
+      log.info("Watchee Terminated, sender is " + sender.toString())
   }
 }
 
