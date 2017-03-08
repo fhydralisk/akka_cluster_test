@@ -12,7 +12,9 @@ import com.typesafe.config.ConfigFactory
 
 object App {
   def main(args: Array[String]) = {
-    val hostname = NetworkInterface.getByName("eth0").getInetAddresses().nextElement().getHostName()
+    val addresses = NetworkInterface.getByName("eth0").getInetAddresses()
+    import scala.collection.JavaConverters._
+    val hostname = addresses.asScala.filter( _.getAddress().length == 4).next().getHostName()
     val config = ConfigFactory.parseString(s"""akka.remote.netty.tcp.hostname = "$hostname"""").withFallback(ConfigFactory.load())
     val system = ActorSystem("ClusterShard", config)
 
