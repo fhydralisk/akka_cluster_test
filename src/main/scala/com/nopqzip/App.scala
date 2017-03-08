@@ -1,5 +1,9 @@
 package com.nopqzip
 
+import akka.actor.ActorSystem
+import java.net.NetworkInterface
+
+import com.typesafe.config.ConfigFactory
 
 /**
  * @author ${user.name}
@@ -8,7 +12,9 @@ package com.nopqzip
 
 object App {
   def main(args: Array[String]) = {
-    WatcheeApp.main(Array.empty)
-    WatcherApp.main(Array.empty)
+    val hostname = NetworkInterface.getByName("eth0").getInetAddresses().nextElement().getHostAddress()
+    val config = ConfigFactory.parseString(s"""akka.remote.netty.tcp.hostname = "$hostname"""").withFallback(ConfigFactory.load())
+    val system = ActorSystem("ClusterShard", config)
+
   }
 }
